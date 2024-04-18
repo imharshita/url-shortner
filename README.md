@@ -47,3 +47,6 @@ wikipedia: 1
     * `HTTP GET`
     * Redirect short URL to the long/original URL
     * Click on short URL to get the original one
+
+### Docker
+Docker image can be pulled using "docker pull harshitadocker/url_shortner:latest"
