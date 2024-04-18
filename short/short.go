@@ -43,6 +43,14 @@ func (shorter *shorter) Expand(shortURL string) (longURL string, err error) {
 	return longURL, nil
 }
 
+func (s *shorter) GetShortenedURLs() []string {
+	longURLs := make([]string, 0, len(s.ltos))
+	for longURL := range s.ltos {
+		longURLs = append(longURLs, longURL)
+	}
+	return longURLs
+}
+
 func Start() {
 	Shorter.mustInit()
 	log.Println("shorter starts")

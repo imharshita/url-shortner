@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -14,7 +15,6 @@ import (
 
 func ShortURL(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"msg":"short url"}`))
 	var err error
 	if r.Body == nil {
 		log.Printf("request body is empty.")
@@ -27,10 +27,11 @@ func ShortURL(w http.ResponseWriter, r *http.Request) {
 
 	// Attempt to decode the request body into a shortReq struct
 	var shortReq shortReq
-	if err := json.NewDecoder(r.Body).Decode(&shortReq); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&shortReq)
+	if err != nil {
 		log.Printf("parse short request error. %v", err)
 		w.WriteHeader(http.StatusBadRequest)
-		errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusBadRequest)})
+		errMsg, _ := json.Marshal(errorResp{Msg: err.Error() + ": " + http.StatusText(http.StatusBadRequest)})
 		w.Write(errMsg)
 		return
 	}
@@ -48,7 +49,7 @@ func ShortURL(w http.ResponseWriter, r *http.Request) {
 	longURL, err = url.Parse(shortReq.LongURL)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		errMsg, _ := json.Marshal(errorResp{Msg: "requested url is malformed"})
+		errMsg, _ := json.Marshal(errorResp{Msg: err.Error() + ": " + http.StatusText(http.StatusBadRequest)})
 		w.Write(errMsg)
 		return
 	} else {
@@ -76,7 +77,7 @@ func ShortURL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("short url error. %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusInternalServerError)})
+		errMsg, _ := json.Marshal(errorResp{Msg: err.Error() + ": " + http.StatusText(http.StatusInternalServerError)})
 		w.Write(errMsg)
 		return
 	} else {
@@ -120,10 +121,11 @@ func ExpandURL(w http.ResponseWriter, r *http.Request) {
 
 	// Attempt to decode the request body into a shortReq struct
 	var expandReq expandReq
-	if err := json.NewDecoder(r.Body).Decode(&expandReq); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&expandReq)
+	if err != nil {
 		log.Printf("parse short request error. %v", err)
 		w.WriteHeader(http.StatusBadRequest)
-		errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusBadRequest)})
+		errMsg, _ := json.Marshal(errorResp{Msg: err.Error() + ": " + http.StatusText(http.StatusBadRequest)})
 		w.Write(errMsg)
 		return
 	}
@@ -142,7 +144,7 @@ func ExpandURL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf(`"%v" is not a valid url`, expandReq.ShortURL)
 		w.WriteHeader(http.StatusBadRequest)
-		errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusBadRequest)})
+		errMsg, _ := json.Marshal(errorResp{Msg: err.Error() + ": " + http.StatusText(http.StatusBadRequest)})
 		w.Write(errMsg)
 		return
 	} else {
@@ -151,7 +153,7 @@ func ExpandURL(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("expand url error. %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusInternalServerError)})
+			errMsg, _ := json.Marshal(errorResp{Msg: err.Error() + ": " + http.StatusText(http.StatusInternalServerError)})
 			w.Write(errMsg)
 			return
 		} else {
@@ -159,4 +161,63 @@ func ExpandURL(w http.ResponseWriter, r *http.Request) {
 			w.Write(expandResp)
 		}
 	}
+}
+
+func Metrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// Get the count of each domain
+	domainCounts := make(map[string]int)
+	for _, url := range short.Shorter.GetShortenedURLs() {
+		domain := getDomainFromURL(url)
+		domainCounts[domain]++
+	}
+
+	// Sort the domain counts in descending order
+	sortedCounts := make([]domainCount, 0, len(domainCounts))
+	for domain, count := range domainCounts {
+		sortedCounts = append(sortedCounts, domainCount{Domain: domain, Count: count})
+	}
+	sort.Slice(sortedCounts, func(i, j int) bool {
+		return sortedCounts[i].Count > sortedCounts[j].Count
+	})
+
+	// Get the top 3 domain names
+	var top3Domains []domainCount
+	if len(sortedCounts) >= 3 {
+		top3Domains = sortedCounts[:3]
+	} else {
+		top3Domains = sortedCounts
+	}
+
+	for _, count := range top3Domains {
+		log.Printf("%s: %v", count.Domain, count.Count)
+	}
+
+	// Write the response
+	jsonResp, err := json.Marshal(top3Domains)
+	if err != nil {
+		log.Printf("error marshaling metrics response: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonResp)
+}
+
+func getDomainFromURL(urlStr string) string {
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		log.Printf("error parsing URL: %v", err)
+		return ""
+	}
+
+	hostParts := strings.Split(parsedURL.Hostname(), ".")
+	// Extract the subdomain (e.g., "www") and the domain (e.g., "youtube")
+	var domain string
+	if len(hostParts) >= 2 {
+		domain = hostParts[len(hostParts)-2]
+	} else {
+		domain = parsedURL.Hostname()
+	}
+
+	return domain
 }

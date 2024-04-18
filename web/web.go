@@ -17,6 +17,7 @@ func Start() {
 	r.HandleFunc("/health", api.CheckHealth).Methods(http.MethodGet)
 	r.HandleFunc("/short", api.ShortURL).Methods(http.MethodPost).HeadersRegexp("Content-Type", "application/json")
 	r.HandleFunc("/expand", api.ExpandURL).Methods(http.MethodPost).HeadersRegexp("Content-Type", "application/json")
+	r.HandleFunc("/metrics", api.Metrics).Methods(http.MethodGet) // Add this line before the "/{shortenedURL}" route matcher
 	r.HandleFunc("/{shortenedURL:[a-zA-Z0-9]{1,11}}", api.Redirect).Methods(http.MethodGet)
 
 	log.Println(conf.Conf.Http.Listen)
