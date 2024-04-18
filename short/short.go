@@ -3,6 +3,7 @@ package short
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"log"
 )
 
@@ -27,10 +28,19 @@ func (shorter *shorter) Short(longURL string) (shortURL string, err error) {
 
 	return shortURL, nil
 }
+
 func generateHash(url string) string {
 	hasher := md5.New()
 	hasher.Write([]byte(url))
 	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func (shorter *shorter) Expand(shortURL string) (longURL string, err error) {
+	longURL, ok := shorter.stol[shortURL]
+	if !ok {
+		return "", errors.New("short URL not found")
+	}
+	return longURL, nil
 }
 
 func Start() {

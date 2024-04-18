@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"github.com/imharshita/url-shortner/conf"
 	"github.com/imharshita/url-shortner/short"
 )
@@ -81,5 +82,81 @@ func ShortURL(w http.ResponseWriter, r *http.Request) {
 	} else {
 		shortResp, _ := json.Marshal(shortResp{ShortURL: shortenedURL})
 		w.Write(shortResp)
+	}
+}
+
+func Redirect(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	shortededURL := vars["shortenedURL"]
+
+	longURL, err := short.Shorter.Expand(shortededURL)
+	if err != nil {
+		log.Printf("redirect short url error. %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(http.StatusText(http.StatusInternalServerError)))
+		return
+	} else {
+		if len(longURL) != 0 {
+			w.Header().Set("Location", longURL)
+			w.WriteHeader(http.StatusTemporaryRedirect)
+		} else {
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}
+}
+
+func ExpandURL(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var err error
+	if r.Body == nil {
+		log.Printf("request body is empty.")
+		w.WriteHeader(http.StatusBadRequest)
+		errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusBadRequest)})
+		w.Write(errMsg)
+		return
+	}
+	defer r.Body.Close()
+
+	// Attempt to decode the request body into a shortReq struct
+	var expandReq expandReq
+	if err := json.NewDecoder(r.Body).Decode(&expandReq); err != nil {
+		log.Printf("parse short request error. %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusBadRequest)})
+		w.Write(errMsg)
+		return
+	}
+
+	// Check if the request body satisfies the structure of shortReq
+	if expandReq.ShortURL == "" {
+		log.Printf("ShortURL is required.")
+		w.WriteHeader(http.StatusBadRequest)
+		errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusBadRequest)})
+		w.Write(errMsg)
+		return
+	}
+
+	var shortURL *url.URL
+	shortURL, err = url.Parse(expandReq.ShortURL)
+	if err != nil {
+		log.Printf(`"%v" is not a valid url`, expandReq.ShortURL)
+		w.WriteHeader(http.StatusBadRequest)
+		errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusBadRequest)})
+		w.Write(errMsg)
+		return
+	} else {
+		var expandedURL string
+		expandedURL, err = short.Shorter.Expand(strings.TrimLeft(shortURL.Path, "/"))
+		if err != nil {
+			log.Printf("expand url error. %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			errMsg, _ := json.Marshal(errorResp{Msg: http.StatusText(http.StatusInternalServerError)})
+			w.Write(errMsg)
+			return
+		} else {
+			expandResp, _ := json.Marshal(expandResp{LongURL: expandedURL})
+			w.Write(expandResp)
+		}
 	}
 }

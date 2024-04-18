@@ -11,3 +11,16 @@ type errorResp struct {
 type shortResp struct {
 	ShortURL string `json:"shortURL"`
 }
+
+type expandReq struct {
+	ShortURL string `json:"shortURL"`
+}
+
+type expandResp struct {
+	LongURL string `json:"longURL"`
+}
+
+type domainCount struct {
+	Domain string `json:"domain"`
+	Count  int    `json:"count"`
+}
